@@ -1,0 +1,482 @@
+{
+  "name": "Automated SEO Data Collection and AI-Powered Insights Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://api.valueserp.com/search?api_key=8A76E9A68B9843ED9061F6061BBCB339&q=site:https://www.youtube.com/&num=20",
+        "options": {}
+      },
+      "id": "909f753b-1a55-4771-b72a-8a3a244c64df",
+      "name": "Fetch SEO Data from API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        480,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "searchResults",
+              "value": "={{ $json.organic_results }}",
+              "type": "array"
+            },
+            {
+              "id": "id-3",
+              "name": "totalResults",
+              "value": "={{ $json.search_information?.total_results }}",
+              "type": "number"
+            },
+            {
+              "id": "id-4",
+              "name": "searchQuery",
+              "value": "={{ $json.search_parameters?.q }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "eeb8c704-0736-4949-a973-98c26160232e",
+      "name": "Transform SEO Metrics",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        704,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst pageRankings = [];\nconst keywordData = [];\nconst summaryStats = {\n  totalPages: 0,\n  averagePosition: 0,\n  topRankingPages: []\n};\n\nlet totalPosition = 0;\n\nfor (const item of items) {\n  const data = item.json;\n  \n  const page = {\n    url: data.link || '',\n    title: data.title || '',\n    snippet: data.snippet || '',\n    position: data.position || 0,\n    domain: data.domain || ''\n  };\n  \n  pageRankings.push(page);\n  totalPosition += page.position;\n  \n  const titleWords = (page.title || '').toLowerCase().split(/\\s+/).filter(word => word.length > 3);\n  const snippetWords = (page.snippet || '').toLowerCase().split(/\\s+/).filter(word => word.length > 3);\n  const keywords = [...new Set([...titleWords, ...snippetWords])];\n  \n  keywordData.push({\n    url: page.url,\n    keywords: keywords\n  });\n}\n\nsummaryStats.totalPages = items.length;\nsummaryStats.averagePosition = items.length > 0 ? (totalPosition / items.length).toFixed(2) : 0;\n\nsummaryStats.topRankingPages = pageRankings\n  .sort((a, b) => a.position - b.position)\n  .slice(0, 10)\n  .map(page => ({\n    url: page.url,\n    title: page.title,\n    position: page.position\n  }));\n\nconst keywordFrequency = {};\nkeywordData.forEach(item => {\n  item.keywords.forEach(keyword => {\n    keywordFrequency[keyword] = (keywordFrequency[keyword] || 0) + 1;\n  });\n});\n\nconst topKeywords = Object.entries(keywordFrequency)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 20)\n  .map(([keyword, count]) => ({ keyword, count }));\n\nreturn [\n  {\n    json: {\n      summary: summaryStats,\n      topKeywords: topKeywords,\n      pageRankings: pageRankings,\n      searchQuery: $('Transform SEO Metrics').item.json.searchQuery,\n      totalResults: $('Transform SEO Metrics').item.json.totalResults\n    }\n  }\n];"
+      },
+      "id": "6eda946b-a002-4d36-8e7c-3b1564b3cff2",
+      "name": "Calculate SEO Trends",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json, null, 2) }}",
+        "options": {
+          "systemMessage": "You are an expert SEO analyst. Analyze the provided SEO data and generate actionable insights. Focus on: 1) Overall performance summary, 2) Top performing pages and keywords, 3) Ranking trends and patterns, 4) Specific recommendations for improvement. Be concise and data-driven."
+        }
+      },
+      "id": "3141e552-daad-4c04-85e3-ab631e99d6bf",
+      "name": "SEO Insights AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1376,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "9a28d4a4-4bf6-4f87-8256-68311c5ad872",
+      "name": "Google Gemini Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1376,
+        608
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "wLPSomZ292B07eDi",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "date",
+              "value": "={{ $now.toFormat('yyyy-MM-dd') }}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "aiInsights",
+              "value": "={{ $('SEO Insights AI Agent').item.json.output }}",
+              "type": "string"
+            },
+            {
+              "id": "id-4",
+              "name": "totalResults",
+              "value": "={{ $('Calculate SEO Trends').item.json.totalResults }}",
+              "type": "number"
+            },
+            {
+              "id": "id-5",
+              "name": "averagePosition",
+              "value": "={{ $('Calculate SEO Trends').item.json.summary.averagePosition }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fbc2f813-92b6-4473-931c-84b4befc50c4",
+      "name": "Prepare Storage Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1728,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1njl06Y6CIn2HsGes9OvQEy0DIYBaGnZqlbOsJSYuPto",
+          "mode": "list",
+          "cachedResultName": "SEO Assignment",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1njl06Y6CIn2HsGes9OvQEy0DIYBaGnZqlbOsJSYuPto/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1njl06Y6CIn2HsGes9OvQEy0DIYBaGnZqlbOsJSYuPto/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "summary",
+              "displayName": "summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "topKeywords",
+              "displayName": "topKeywords",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "recommendations",
+              "displayName": "recommendations",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "rankingTrends",
+              "displayName": "rankingTrends",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "aiInsights",
+              "displayName": "aiInsights",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "searchQuery",
+              "displayName": "searchQuery",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "totalResults",
+              "displayName": "totalResults",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "averagePosition",
+              "displayName": "averagePosition",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "0be94159-323b-47ab-8d3d-0a8de5619dde",
+      "name": "Store SEO Reports",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1952,
+        304
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "sSvwxyd2Ye9mBigP",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "id-1",
+              "name": "emailSubject",
+              "value": "=SEO Report - {{ $now.toFormat('MMMM dd, yyyy') }}",
+              "type": "string"
+            },
+            {
+              "id": "id-2",
+              "name": "emailBody",
+              "value": "=<!DOCTYPE html>\n<html>\n<head>\n<style>\nbody { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }\n.container { max-width: 100%; margin: 0 auto; background: #ffffff; }\n.header { background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%); color: white; padding: 30px 20px; text-align: center; }\n.header h1 { margin: 0; font-size: 28px; }\n.header p { margin: 10px 0 0 0; font-size: 14px; opacity: 0.9; }\n.content { padding: 30px 20px; }\n.section { margin-bottom: 25px; }\n.section-title { color: #2c3e50; font-size: 20px; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 2px solid #3498db; }\n.metrics-box { background: #e3f2fd; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #2196f3; }\n.recommendations-box { background: #e8f5e9; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #4caf50; }\n.info-box { background: #fff3e0; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #ff9800; }\n.divider { height: 1px; background: #ecf0f1; margin: 20px 0; }\n.footer { background: #f5f5f5; padding: 20px; text-align: center; font-size: 12px; color: #777; }\nul { padding-left: 20px; }\nli { margin: 8px 0; }\n</style>\n</head>\n<body>\n<div class=\"container\">\n<div class=\"header\">\n<h1>📊 SEO Performance Report</h1>\n<p>{{ $now.toFormat('MMMM dd, yyyy') }}</p>\n</div>\n<div class=\"content\">\n<div class=\"section\">\n<div class=\"section-title\">Executive Summary</div>\n<div class=\"metrics-box\">\n<strong>Search Query:</strong> {{ $('Calculate SEO Trends').item.json.searchQuery }}<br>\n<strong>Total Results:</strong> {{ $('Calculate SEO Trends').item.json.totalResults.toLocaleString() }}<br>\n<strong>Average Position:</strong> {{ $('Calculate SEO Trends').item.json.summary.averagePosition }}<br>\n<strong>Pages Analyzed:</strong> {{ $('Calculate SEO Trends').item.json.summary.totalPages }}\n</div>\n</div>\n<div class=\"divider\"></div>\n<div class=\"section\">\n<div class=\"section-title\">AI-Powered Insights</div>\n<div class=\"info-box\">\n{{ $('SEO Insights AI Agent').item.json.output.replace(/[#*]/g, '').replace(/\\n/g, '<br>') }}\n</div>\n</div>\n<div class=\"divider\"></div>\n<div class=\"section\">\n<div class=\"section-title\">Top Performing Pages</div>\n<div class=\"metrics-box\">\n{{ $('Calculate SEO Trends').item.json.summary.topRankingPages.slice(0, 5).map((page, i) => `<strong>${i + 1}. ${page.title}</strong><br><small>Position: ${page.position} | ${page.url}</small>`).join('<br><br>') }}\n</div>\n</div>\n<div class=\"divider\"></div>\n<div class=\"section\">\n<div class=\"section-title\">Top Keywords</div>\n<div class=\"recommendations-box\">\n{{ $('Calculate SEO Trends').item.json.topKeywords.slice(0, 10).map((kw, i) => `${i + 1}. <strong>${kw.keyword}</strong> (${kw.count} occurrences)`).join('<br>') }}\n</div>\n</div>\n</div>\n<div class=\"footer\">\n<p>Generated automatically by your SEO Analytics Workflow</p>\n<p>© {{ $now.toFormat('yyyy') }} | Powered by n8n</p>\n</div>\n</div>\n</body>\n</html>",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "03244454-bba6-4139-abac-7ac0b339d336",
+      "name": "Prepare Email Content",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1952,
+        496
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "sharongadi2004@gmail.com",
+        "subject": "={{ $json.emailSubject }}",
+        "message": "={{ $json.emailBody }}",
+        "options": {}
+      },
+      "id": "7cf60ecf-445b-417e-a73a-11537eb00e9a",
+      "name": "Send SEO Report Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2176,
+        496
+      ],
+      "webhookId": "d27ea97c-8cb4-4773-a39d-9c2a1c2e866a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "f4J8S6FBeKpC0lae",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "searchResults",
+        "options": {}
+      },
+      "id": "1e1ad155-69e4-40a0-bf55-a757d4f278db",
+      "name": "Split Search Results",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        928,
+        400
+      ]
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        272,
+        400
+      ],
+      "id": "079c8f40-a458-4a9a-beba-c24462d00d30",
+      "name": "When clicking ‘Execute workflow’"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Calculate SEO Trends": {
+      "main": [
+        [
+          {
+            "node": "SEO Insights AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch SEO Data from API": {
+      "main": [
+        [
+          {
+            "node": "Transform SEO Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform SEO Metrics": {
+      "main": [
+        [
+          {
+            "node": "Split Search Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "SEO Insights AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SEO Insights AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Prepare Storage Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Storage Data": {
+      "main": [
+        [
+          {
+            "node": "Store SEO Reports",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Email Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Email Content": {
+      "main": [
+        [
+          {
+            "node": "Send SEO Report Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Search Results": {
+      "main": [
+        [
+          {
+            "node": "Calculate SEO Trends",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Fetch SEO Data from API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "c5d0044a-dc2b-425a-8c6f-58c92dc347da",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "12ec123eb964124848299c082c660702cafc714297a00dbd95051dfeccd75532"
+  },
+  "id": "gvJUggLECMUi2NmJ",
+  "tags": []
+}
